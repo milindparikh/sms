@@ -1,0 +1,6 @@
+{application, smslib, 
+  [ {description, "Library of Supporting Probabilistic Structures for SMS"},
+    {vsn, "0.1.0"}, 
+    {modules, [bloomfilter]},
+    ]
+}
