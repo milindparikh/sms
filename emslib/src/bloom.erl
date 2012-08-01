@@ -7,7 +7,8 @@
 -import(math, [log/1, pow/2]).
 -import(erlang, [phash2/2]).
 -import(bloomfunc, [calc_least_elements/2, calc_hash_indices/3, set_bits/4, get_bits/3]).
-
+-import(bloomfunc, [decr_p_counters/4]).
+			
 
 -record(bloom, {
     m      = 0,       % The size of the bitmap in bits.

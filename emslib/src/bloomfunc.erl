@@ -1,6 +1,6 @@
 -module(bloomfunc).
--export([calc_least_elements/2, calc_hash_indices/3, compute_stable_bloom_int_size/1]).
--export ([set_bits/4, get_bits/3]).
+-export([calc_least_elements/2, calc_hash_indices/3]).
+-export ([set_bits/4, get_bits/3, decr_bits/3, decr_p_counters/4]).
 
 -import(math, [log/1, pow/2]).
 -import(erlang, [phash2/2]).
@@ -40,5 +40,19 @@ get_bits(Bin, Size, Index) ->
 	 PreBits = Size * (Index - 1),
 	 <<_:PreBits/bits, RealBits:Size, _/bits>> = Bin,	
 	 RealBits.
-	  
-compute_stable_bloom_int_size({_, _}) -> 2.    %% TO DO : FIX THIS
+
+decr_bits(Bin, Size, Index) ->
+	 PreBits = Size * (Index - 1),
+	 <<Pre:PreBits/bits, RealBits:Size, Post/bits>> = Bin,	
+	 case RealBits == 0 of 
+            true -> Bin;
+            false -> DecrBits = (RealBits - 1), 
+                     <<Pre:PreBits/bits, DecrBits:Size, Post/bits>>
+            end.
+         
+
+decr_p_counters(Bin, _, _, 0) -> Bin;
+decr_p_counters(Bin, StartPosition, MaxSizeOfInt, DecrCount) ->
+        Bin0 = decr_bits(Bin, MaxSizeOfInt, (StartPosition - DecrCount)),
+	decr_p_counters(Bin0, StartPosition, MaxSizeOfInt, DecrCount -1 ).
+
