@@ -6,7 +6,7 @@
 
 -import(math, [log/1, pow/2]).
 -import(erlang, [phash2/2]).
--import(bloomfunc, [calc_least_elements/2, calc_hash_indices/3]).
+-import(bloomfunc, [calc_least_elements/2, calc_hash_indices/3, set_bits/4, get_bits/3]).
 
 
 -record(bloom, {
@@ -30,7 +30,7 @@ new(N) -> new(N, 0.001).
  
 new(N, E) when N > 0, is_float(E), E > 0, E =< 1 ->
     {M, K} = calc_least_elements(N, E),
-    #bloom{m=M, bitmap = <<0:((M+7) div 8 * 8)>>, k=K, n=N}.
+    #bloom{m=M, bitmap = <<0:M>>, k=K, n=N}.
 
 %% @spec is_bloom(bloom()) -> bool()
 %% @doc Determines if the given argument is a bloom record.
@@ -43,10 +43,8 @@ is_element(Key, B) -> is_element(Key, B, calc_hash_indices(Key, B#bloom.m, B#blo
 
 is_element(_, _, []) -> true;
 is_element(Key, B, [Idx | T]) ->
-    ByteIdx = Idx div 8,
-    <<_:ByteIdx/binary, Byte:8, _/binary>> = B#bloom.bitmap,
-    Mask = 1 bsl (Idx rem 8),
-    case 0 =/= Byte band Mask of
+    RealBits = get_bits(B#bloom.bitmap, 1, Idx),
+    case 1 == RealBits of
          true -> is_element(Key, B, T);
         false -> false
     end.
@@ -55,18 +53,9 @@ is_element(Key, B, [Idx | T]) ->
 %% @doc Adds the key to the filter.
 add_element(Key, #bloom{k = K, m = M, keys=Keys, n=N, bitmap=Bitmap} = B) when Keys < N ->
     Idxs = calc_hash_indices(Key, M, K),
-    Bitmap0 = set_bits(Bitmap, Idxs),
+    Bitmap0 = set_bits(Bitmap,1, Idxs,1),
     case Bitmap0 == Bitmap of
          true -> B;    % Don't increment key count for duplicates.
         false -> B#bloom{bitmap=Bitmap0, keys=Keys+1}
     end.
-
-set_bits(Bin, []) -> Bin;
-set_bits(Bin, [Idx | Idxs]) ->
-    ByteIdx = Idx div 8,
-    <<Pre:ByteIdx/binary, Byte:8, Post/binary>> = Bin,
-    Mask = 1 bsl (Idx rem 8),
-    Byte0 = Byte bor Mask,
-    set_bits(<<Pre/binary, Byte0:8, Post/binary>>, Idxs).
-
 

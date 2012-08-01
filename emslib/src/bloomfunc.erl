@@ -1,5 +1,6 @@
 -module(bloomfunc).
--export([calc_least_elements/2, calc_hash_indices/3]).
+-export([calc_least_elements/2, calc_hash_indices/3, compute_stable_bloom_int_size/1]).
+-export ([set_bits/4, get_bits/3]).
 
 -import(math, [log/1, pow/2]).
 -import(erlang, [phash2/2]).
@@ -27,3 +28,17 @@ calc_hash_indices (SizeOfMap, NumberOfHashFunctions, X, Y, AccumulatedIndices) -
     Xi = (X+Y) rem SizeOfMap,
     Yi = (Y+NumberOfHashFunctions) rem SizeOfMap,
     calc_hash_indices (SizeOfMap, NumberOfHashFunctions - 1, Xi, Yi, [Xi | AccumulatedIndices]).
+
+
+set_bits(Bin, _, [], _) -> Bin;
+set_bits(Bin, Size, [Index | T], Value) -> 
+	 PreBits = Size * (Index - 1),
+         <<Pre:PreBits/bits, _:Size, Post/bits>> = Bin,
+	 set_bits(<<Pre:PreBits/bits, Value:Size, Post/bits>>, Size, T, Value).	
+
+get_bits(Bin, Size, Index) -> 
+	 PreBits = Size * (Index - 1),
+	 <<_:PreBits/bits, RealBits:Size, _/bits>> = Bin,	
+	 RealBits.
+	  
+compute_stable_bloom_int_size({_, _}) -> 2.    %% TO DO : FIX THIS
