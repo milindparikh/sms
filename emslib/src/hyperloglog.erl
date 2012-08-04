@@ -35,8 +35,8 @@ new(Rsd) ->
 count_elements(#hyperloglog{log2m = Log2M, alphamm = AlphaMM} = HLL) -> 
       EstimateFromBitMap = hll_compute_sum_in_bit_map(HLL),
       RevisedEstimate = (AlphaMM * (1 / EstimateFromBitMap)),
-      Log2M.
-
+      ReRevisedEstimate = hll_apply_range_estimators (RevisedEstimate, HLL),
+	  ReRevisedEstimate.
 
 add_element(Key, #hyperloglog{log2m = Log2M, bitmap = BitMap, sizeofint = SizeOfInt} = HLL) ->
     BinHash = erlang:phash2(Key, 4294967296),		 
@@ -51,7 +51,9 @@ add_element(Key, #hyperloglog{log2m = Log2M, bitmap = BitMap, sizeofint = SizeOf
                    false -> 
                       HLL
 	end.
-        
+
+
+
 hll_compute_sum_in_bit_map(#hyperloglog{m=M, bitmap=BitMap, sizeofint=SizeOfInt}) -> 
                hll_compute_sum_in_bit_map(BitMap, SizeOfInt, M, 0).
 
@@ -60,7 +62,20 @@ hll_compute_sum_in_bit_map(Bin, SizeOfInt, Cnt, Estimate) ->
       Value = get_bits(Bin, SizeOfInt, Cnt),
       hll_compute_sum_in_bit_map(Bin, SizeOfInt, Cnt - 1, Estimate+pow(2, (-1 * Value))).
 
+%% Short Range Estimator
+hll_apply_range_estimators (Estimate, #hyperloglog{m = M, bitmap=BitMap, sizeofint = SizeOfInt}) when (Estimate =< (5.0/2.0) * M) -> 
+      NumberOfZerosInBitMap = hll_compute_zeros_in_bitmap(BitMap, SizeOfInt, M),
+      round(M * log(M/NumberOfZerosInBitMap));
 
+hll_apply_range_estimators (Estimate,_) -> round(Estimate).
+
+hll_compute_zeros_in_bitmap(BitMap, SizeOfInt, Count) ->
+     hll_compute_zeros_in_bitmap(BitMap, SizeOfInt, Count, 0).
+     hll_compute_zeros_in_bitmap(_, _, 0, Counter) -> Counter;
+     hll_compute_zeros_in_bitmap(BitMap, SizeOfInt, Count, Counter) ->
+     IncrCount = get_bits(BitMap, SizeOfInt, Count),
+     hll_compute_zeros_in_bitmap(BitMap, SizeOfInt, Count-1, Counter +
+     case IncrCount == 0 of true -> 1; false -> 0 end).
 computeRank(Bin) -> 
      	   <<F1:1, R1/bits>> = Bin,
 	   computeRank(F1, R1, 1).
