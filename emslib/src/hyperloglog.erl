@@ -3,7 +3,7 @@
 
 -module(hyperloglog).
 -export([new/1,  add_element/2, count_elements/1, calculateLog2M/1]).
--export([computeAlphaMM/2,computeRank/3, computeRank/1, check/0]).
+-export([computeAlphaMM/2,computeRank/3, computeRank/1]).
 
 -import(math, [log/1, pow/2]).
 -import(erlang, [phash2/2]).
@@ -52,8 +52,6 @@ add_element(Key, #hyperloglog{log2m = Log2M, bitmap = BitMap, sizeofint = SizeOf
                       HLL
 	end.
         
-check() -> <<Idx:26, Rest/bits>> = <<1278007117:32>>, {Idx, Rest}.  
-               
 hll_compute_sum_in_bit_map(#hyperloglog{m=M, bitmap=BitMap, sizeofint=SizeOfInt}) -> 
                hll_compute_sum_in_bit_map(BitMap, SizeOfInt, M, 0).
 
