@@ -1,4 +1,5 @@
-%% 
+%% @doc Implementation of the Hyper Log Log Datastructure
+%% @reference [http://algo.inria.fr/flajolet/Publications/FlFuGaMe07.pdf]
 %% Created: Jul 2, 2012
 %% Description: TODO: Add description to HyperLogLog
 %% TODO: 
