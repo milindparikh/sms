@@ -3,7 +3,6 @@
 %% Created: Jul 2, 2012
 %% Description: TODO: Add description to HyperLogLog
 %% TODO: 
-%%  -> Named HyperLogLog
 %%  -> Implement All Estimates
 %%  -> Write Unit Test Cases
 %%  -> Fine tune message passing and remove extra message passing
@@ -22,9 +21,11 @@
 %% API Functions
 %%
 
-initialize(RSD) -> initialize(RSD, createRegisters).
+initialize(RSD) -> initialize(RSD, "").
 
-initialize(RSD, Type) -> Log2M = log2M(RSD),
+initialize(RSD, Name) -> initialize(RSD, createRegisters, Name).
+
+initialize(RSD, Type, Name) -> Log2M = log2M(RSD),
 				   RegisterCount = trunc(math:pow(2, Log2M)),
 				   case Type of 
 			  		  createRegisters -> 
@@ -32,15 +33,15 @@ initialize(RSD, Type) -> Log2M = log2M(RSD),
 					  _ -> ok
 		  		   end,
 				   AlphaMM = getAlphaMM(Log2M, RegisterCount),
-				   initialize_registers(RegisterCount, Type),
-				   spawn(eHyperLogLog, initialize, [Log2M, RegisterCount, AlphaMM]).			   
+				   initialize_registers(RegisterCount, Type, Name),
+				   spawn(eHyperLogLog, initialize, [Log2M, RegisterCount, AlphaMM, Name]).			   
 
-initialize(Log2M, RegisterCount, AlphaMM) ->
+initialize(Log2M, RegisterCount, AlphaMM, Name) ->
 	              receive
-					    {Parent, addElement, Element} -> Parent ! add_element(Element, Log2M),
-									initialize(Log2M, RegisterCount, AlphaMM);
-					    {Parent, getCardinality} -> Parent ! cardinality(RegisterCount, AlphaMM),
-				  					initialize(Log2M, RegisterCount, AlphaMM)
+					    {Parent, addElement, Element} -> Parent ! add_element(Element, Log2M, Name),
+									initialize(Log2M, RegisterCount, AlphaMM, Name);
+					    {Parent, getCardinality} -> Parent ! cardinality(RegisterCount, AlphaMM, Name),
+				  					initialize(Log2M, RegisterCount, AlphaMM, Name)
                    end.
 
 
@@ -48,21 +49,21 @@ initialize(Log2M, RegisterCount, AlphaMM) ->
 %% Local Functions
 %%
 
-initialize_registers(0, Type) -> io:format("~n Registers Initialized via ~p", [Type]);
+initialize_registers(0, Type, Name) -> io:format("~n Registers Initialized via ~p", [Type]);
 
-initialize_registers(RegisterCount, Type)
+initialize_registers(RegisterCount, Type, Name)
      when RegisterCount > 0 ->
-	      RegisterName = list_to_atom(integer_to_list(RegisterCount)),
+		  RegisterName = list_to_atom(string:concat(Name ,integer_to_list(RegisterCount))),	
+	      %%RegisterName = list_to_atom(integer_to_list(RegisterCount)),
 		  setRegister( RegisterName, Type),
-		  initialize_registers(RegisterCount - 1, Type).
+		  initialize_registers(RegisterCount - 1, Type, Name).
     
 
-add_element(Element, Log2M) ->
+add_element(Element, Log2M, Name) ->
 	BinHash = erlang:phash2(Element, 4294967296),
 	<<Idx:Log2M, Rest/bits>> = <<BinHash:32>>,
 	Rank = computeRank(Idx),
-	Result = pushElementToRegister(Rank, Rest),
-	list_to_atom(integer_to_list(Rank)) ! {setValue, Rest},
+	Result = pushElementToRegister(Rank, Rest, Name),
 	{ok, elementAdded, Result}.
 
 %% Get Log2M for RSD
@@ -109,39 +110,41 @@ destroyExistingRegisters(RegisterCount) ->
 	end,
 	destroyExistingRegisters(RegisterCount -1).
 	
-cardinality(RegisterCount, AlphaMM) -> 
-							  RegisterSum = getRegisterSum(0 , RegisterCount),
+cardinality(RegisterCount, AlphaMM, Name) -> 
+							  RegisterSum = getRegisterSum(0 , RegisterCount, Name),
  							  Estimate = getEstimate(RegisterSum, AlphaMM),
- 							  RevisedEstimate = getRevisedSmallRangeEstimate(RegisterCount),
+ 							  RevisedEstimate = getRevisedSmallRangeEstimate(RegisterCount, Name),
  							  RevisedEstimate.
 
-getRegisterSum(RegisterSum, 0) -> RegisterSum;
+getRegisterSum(RegisterSum, 0, Name) -> RegisterSum;
 
-getRegisterSum(RegisterSum, RegisterCount) -> 
-											  TempRegisterSum = RegisterSum + math:pow(2, getRegisterValue(RegisterCount)),
-											  getRegisterSum(TempRegisterSum, (RegisterCount-1)).
+getRegisterSum(RegisterSum, RegisterCount, Name) -> 
+							  TempRegisterSum = RegisterSum + math:pow(2, getRegisterValue(RegisterCount, Name)),
+							  getRegisterSum(TempRegisterSum, (RegisterCount-1), Name).
 
 getEstimate(RegisterSum, AlphaMM) -> AlphaMM * (1/ RegisterSum).
 
-getRevisedSmallRangeEstimate(RegisterCount) -> Zeros = getZeros(0, RegisterCount),
+getRevisedSmallRangeEstimate(RegisterCount, Name) -> Zeros = getZeros(0, RegisterCount, Name),
 											   trunc(RegisterCount * math:log( RegisterCount/ Zeros)).
 
-getZeros(ZeroCount, 0) -> ZeroCount;
+getZeros(ZeroCount, 0, Name) -> ZeroCount;
 
-getZeros(ZeroCount, RegisterCount) -> TempValue = getRegisterValue(RegisterCount),
+getZeros(ZeroCount, RegisterCount, Name) -> TempValue = getRegisterValue(RegisterCount, Name),
 									  case TempValue of 
-										  0 -> getZeros(ZeroCount + 1, RegisterCount - 1);
-										  _ -> getZeros(ZeroCount, RegisterCount -1)
+										  0 -> getZeros(ZeroCount + 1, RegisterCount - 1, Name);
+										  _ -> getZeros(ZeroCount, RegisterCount -1, Name)
 									  end.
 									  
-getRegisterValue(RegisterCount) ->
-	list_to_atom(integer_to_list(RegisterCount)) ! {self(), getValue},
+getRegisterValue(RegisterCount, Name) ->
+	list_to_atom(string:concat(Name ,integer_to_list(RegisterCount))) ! {self(), getValue},
+	%%list_to_atom(integer_to_list(RegisterCount)) ! {self(), getValue},
 	receive 
 		Result -> Result 
 	end.
 
-pushElementToRegister(Rank, Rest) ->
-	list_to_atom(integer_to_list(Rank)) ! {self(), setValue, Rest},
+pushElementToRegister(Rank, Rest, Name) ->
+	list_to_atom(string:concat(Name ,integer_to_list(Rank))) ! {self(), setValue, Rest},
+	%%list_to_atom(integer_to_list(Rank)) ! {self(), setValue, Rest},
 	receive
 		Result -> Result
 	end.	
