@@ -3,7 +3,7 @@
 %% Created: Jul 2, 2012
 %% Description: TODO: Add description to HyperLogLog
 %% TODO: 
-%%  -> Implement All Estimates
+%%  -> Implement Long Range Correction
 %%  -> Write Unit Test Cases
 %%  -> Fine tune message passing and remove extra message passing
 %%  -> Fix ability to reset registers to 0 without recreating them 
@@ -113,8 +113,21 @@ destroyExistingRegisters(RegisterCount) ->
 cardinality(RegisterCount, AlphaMM, Name) -> 
 							  RegisterSum = getRegisterSum(0 , RegisterCount, Name),
  							  Estimate = getEstimate(RegisterSum, AlphaMM),
- 							  RevisedEstimate = getRevisedSmallRangeEstimate(RegisterCount, Name),
- 							  RevisedEstimate.
+							  TypeOfEstimate = getTypeOfEstimate(Estimate, RegisterCount),
+							  case TypeOfEstimate of
+								  {smallRangeEstimate} -> 
+									  RevisedEstimate = getRevisedSmallRangeEstimate(RegisterCount, Name),
+									  RevisedEstimate;
+								  {interMediumRangeEstimate} -> 
+									  RevisedEstimate = getRevisedInterMediumEstimate(Estimate), 
+									  RevisedEstimate;
+								  {largeRangeEstimate} -> 
+									  RevisedEstimate = getRevisedLargeRangeEstimate(Estimate), 
+									  RevisedEstimate;
+								  _ -> 
+									  RevisedEstimate = getRevisedSmallRangeEstimate(RegisterCount, Name),
+									  RevisedEstimate 
+							  end.
 
 getRegisterSum(RegisterSum, 0, Name) -> RegisterSum;
 
@@ -126,6 +139,10 @@ getEstimate(RegisterSum, AlphaMM) -> AlphaMM * (1/ RegisterSum).
 
 getRevisedSmallRangeEstimate(RegisterCount, Name) -> Zeros = getZeros(0, RegisterCount, Name),
 											   trunc(RegisterCount * math:log( RegisterCount/ Zeros)).
+
+getRevisedInterMediumEstimate(Estimate) -> trunc(Estimate).
+
+getRevisedLargeRangeEstimate(Estimate) -> trunc(Estimate).
 
 getZeros(ZeroCount, 0, Name) -> ZeroCount;
 
@@ -149,3 +166,12 @@ pushElementToRegister(Rank, Rest, Name) ->
 		Result -> Result
 	end.	
 
+getTypeOfEstimate(Estimate, RegisterCount) -> 
+	if 
+		Estimate =< (2.5 * RegisterCount) -> {smallRangeEstimate};
+		%% Applied Via Estiamte <= (1.0/30.0) * math:pow(2,32)
+	   	Estimate =< 143165576.53333333 -> {interMediumRangeEstimate};
+		%% Applied Via Estiamte > (1.0/30.0) * math:pow(2,32)
+	   	Estimate > 143165576.53333333 -> {largeRangeEstimate};
+	 	true -> {smallRangeEstimate}
+	end.		
